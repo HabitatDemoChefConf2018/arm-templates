@@ -1,0 +1,127 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "variables": {
+        "vnetId": "[resourceId('HABPOC-USWC-Network', 'Microsoft.Network/virtualNetworks', 'westcentralusHABPocVNET')]",
+        "subnetId": "[concat(variables('vnetId'), '/subnets/', 'ServicesSubnet')]"
+    },
+    "resources": [
+        {
+            "name": "CentralBastionAVSet",
+            "type": "Microsoft.Compute/availabilitySets",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-03-30",
+            "dependsOn": [],
+            "properties": {
+                "platformUpdateDomainCount": 5,
+                "platformFaultDomainCount": 2
+            },
+            "sku": {
+                "name": "Aligned"
+            }
+        },
+        {
+            "name": "[concat('CentralBastionNIC', copyIndex())]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-06-01",
+            "copy": {
+                "name": "CentralBastionNICLoop",
+                "count": 3
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "primary",
+                        "properties": {
+                            "privateIPAllocationMethod": "Static",
+                            "privateIPAddress": "[concat('11.100.0.', add(36, copyIndex()))]",
+                            "subnet": {
+                                "id": "[variables('subnetId')]"
+                            },
+                            "loadBalancerBackendAddressPools": [],
+                            "loadBalancerInboundNatRules": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[concat('CentralBastionVM', copyIndex())]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/CentralBastionNIC', copyIndex())]"
+            ],
+            "copy": {
+                "name": "CentralBastionVMLoop",
+                "count": 3
+            },
+            "apiVersion": "2017-03-30",
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets', 'CentralBastionAVSet')]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "Standard_B1ms"
+                },
+                "osProfile": {
+                    "computerName": "[concat('CentralBastionVM', copyIndex())]",
+                    "adminUsername": "habitatpocadmin",
+                    "adminPassword": "!ThisIsASecurePassw0rd"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "OpenLogic",
+                        "offer": "CentOS",
+                        "sku": "7.4",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "[concat('CentralBastionVM', copyIndex(), '-disk-os')]",
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS"
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat('CentralBastionNIC', copyIndex()))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat('CentralBastionVM', copyIndex(), '/BastionPeerInstallation')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/CentralBastionVM', copyIndex())]"
+            ],
+            "copy": {
+                "name": "CentralBastionScriptLoop",
+                "count": 3
+            },
+            "properties": {
+              "publisher": "Microsoft.Azure.Extensions",
+              "type": "CustomScript",
+              "typeHandlerVersion": "2.0",
+              "autoUpgradeMinorVersion": true,
+              "settings": {
+                "fileUris": [
+                  "TODO"
+                ]
+              },
+              "protectedSettings": {
+                "commandToExecute": "[concat('sh install_bastion_peer.sh')]"
+              }
+            }
+          }
+    ]
+}

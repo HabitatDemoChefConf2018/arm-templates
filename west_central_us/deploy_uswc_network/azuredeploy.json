@@ -1,0 +1,146 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+     
+  },
+  "variables": {
+    "DepotNSGName": "[concat(resourceGroup().location, 'Depot-NSG')]",
+    "ServicesNSGName": "[concat(resourceGroup().location, 'Services-NSG')]",
+    "vnetName": "[concat(resourceGroup().location, 'HABPocVNET')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-10-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('DepotNSGName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_Traffic_From_NCR",
+            "properties": {
+              "description": "Allow SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRanges": [
+                "22",
+                "443",
+                "80"
+              ],
+              "sourceAddressPrefixes": [
+                "192.127.94.7"
+              ],
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2017-06-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('ServicesNSGName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_HTTPS",
+            "properties": {
+              "description": "Allow HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2017-06-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('vnetName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkSecurityGroups/', variables('DepotNSGName'))]",
+        "[concat('Microsoft.Network/networkSecurityGroups/', variables('ServicesNSGName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "11.100.0.0/24"
+          ]
+        },
+        "dhcpOptions": {
+          "dnsServers": [
+            "8.8.8.8"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "DepotSubnet",
+            "properties": {
+              "addressPrefix": "11.100.0.0/27",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('DepotNSGName'))]"
+              }
+            }
+          },
+          {
+            "name": "ServicesSubnet",
+            "properties": {
+              "addressPrefix": "11.100.0.32/27",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('ServicesNSGName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2016-06-01",
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "name": "[concat(variables('vnetName'), '/', variables('vnetName'), 'ToCalifornia')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]"
+      ],
+      "properties": {
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": true,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false,
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('HABPOC-USW2-Network', 'Microsoft.Network/virtualNetworks', 'westus2HABPocVNET')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2016-06-01",
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "name": "[concat(variables('vnetName'), '/', variables('vnetName'), 'ToCanada')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]"
+      ],
+      "properties": {
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": true,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false,
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('HABPOC-CANC-Network', 'Microsoft.Network/virtualNetworks', 'canadacentralHABPocVNET')]"
+        }
+      }
+    }
+  ]
+}

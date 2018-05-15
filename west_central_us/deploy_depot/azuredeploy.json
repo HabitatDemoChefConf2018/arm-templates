@@ -1,0 +1,110 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "variables": {
+        "vnetId": "[resourceId('HABPOC-USWC-Network', 'Microsoft.Network/virtualNetworks', 'westcentralusHABPocVNET')]",
+        "subnetId": "[concat(variables('vnetId'), '/subnets/', 'DepotSubnet')]"
+    },
+    "resources": [
+        {
+            "name": "depotAVSet",
+            "type": "Microsoft.Compute/availabilitySets",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-03-30",
+            "dependsOn": [],
+            "properties": {
+                "platformUpdateDomainCount": 5,
+                "platformFaultDomainCount": 2
+            },
+            "sku": {
+                "name": "Aligned"
+            }
+        },
+        {
+            "apiVersion": "2017-04-01",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "depotPIP",
+            "location": "[resourceGroup().location]",
+            "properties": {
+              "publicIPAllocationMethod": "Dynamic",
+              "dnsSettings": {
+                "domainNameLabel": "ncrhabpocdepot"
+              }
+            }
+        },
+        {
+            "name": "depotNic",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-06-01",
+            "dependsOn": [
+                "[resourceID('Microsoft.Network/publicIPAddresses', 'depotPIP')]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "primary",
+                        "properties": {
+                            "privateIPAllocationMethod": "Static",
+                            "privateIPAddress": "11.100.0.4",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'depotPIP')]"
+                            },
+                            "subnet": {
+                                "id": "[variables('subnetId')]"
+                            },
+                            "loadBalancerBackendAddressPools": [],
+                            "loadBalancerInboundNatRules": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "DepotVM",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "Microsoft.Network/networkInterfaces/depotNic"
+            ],
+            "apiVersion": "2017-03-30",
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets', 'depotAVSet')]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "Standard_A2"
+                },
+                "osProfile": {
+                    "computerName": "DepotVM",
+                    "adminUsername": "habitatpocadmin",
+                    "adminPassword": "!ThisIsASecurePassw0rd"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "OpenLogic",
+                        "offer": "CentOS",
+                        "sku": "7.4",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "DepotVM-disk-os",
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS"
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', 'depotNic')]"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,160 @@
+require 'open3'
+
+region = 'EastUS2'
+
+resource_group_deployment_directories = Dir.glob('./deploy_*').map do |n|
+  n.gsub('./','').gsub('deploy_', '')
+end
+
+def get_region(deployment_directory)
+  regions = {
+    "uswc_network" => "westcentralus",
+    "usw2_network" => "westus2",
+    "canc_network" => "canadacentral",
+    "depot" => "westcentralus",
+    "terminal_server" => "westcentralus",
+  }
+  throw "invalid deployment (#{deployment_directory}). Options are: #{regions.keys.join ' '}" if regions[deployment_directory].nil?
+  regions[deployment_directory]
+end
+
+def get_resource_group_infix(deployment_directory)
+  regions = {
+    "uswc_network" => "-USWC-",
+    "usw2_network" => "-USW2-",
+    "canc_network" => "-CANC-",
+    "depot" => "-DEPOT-",
+    "terminal_server" => "-TRMSRV-",
+  }
+  throw "invalid deployment_directory (#{deployment_directory}). Options are: #{regions.keys.join ' '}" if regions[deployment_directory].nil?
+  regions[deployment_directory]
+end
+
+def get_resource_group(deployment_directory)
+  base_resource_group = 'HABPOC'
+  infix = get_resource_group_infix(deployment_directory)
+  resource_groups = {
+    "uswc_network" => "#{base_resource_group}#{infix}Network",
+    "usw2_network" => "#{base_resource_group}#{infix}Network",
+    "canc_network" => "#{base_resource_group}#{infix}Network",
+    "depot" => "#{base_resource_group}#{infix}VM",
+    "terminal_server" => "#{base_resource_group}#{infix}VM",
+  }
+  resource_groups[deployment_directory]
+end
+
+def to_bool(str)
+  return true   if str == true   || str =~ (/(true|t|yes|y|1)$/i)
+  return false  if str == false  || str =~ (/(false|f|no|n|0)$/i)
+  raise ArgumentError.new("invalid value for Boolean: \"#{str}\"")
+end
+
+def create_resource_group(region: , resource_group: )
+  puts "az group exists -n \"#{resource_group}\""
+  stdout, stderr, status = Open3.capture3 "az group exists -n \"#{resource_group}\""
+  unless to_bool(stdout.strip)
+    puts "Resource group: #{resource_group} in #{region} not found. Creating it."
+    sh "az group create -n \"#{resource_group}\" --location #{region}"
+  end
+end
+
+def clean(resource_group:)
+  stdout, stderr, status = Open3.capture3 "az group exists -n \"#{resource_group}\""
+  if to_bool(stdout.strip)
+    puts "Resource group: #{resource_group} found. Destroying it."
+    sh "az group delete -n #{resource_group} -y"
+  end
+end
+
+def deploy(deployment_parameter_directory:)
+  region = get_region(deployment_parameter_directory)
+  puts region
+  resource_group = get_resource_group(deployment_parameter_directory)
+  create_resource_group(
+    region: region, 
+    resource_group: resource_group
+  )
+  parameter_file = "./deploy_#{deployment_parameter_directory}/azuredeploy.parameters.json"
+  template_file = "./deploy_#{deployment_parameter_directory}/azuredeploy.json"
+  parameters_suffix = (File.exist? parameter_file) ? "--parameters #{parameter_file}" : ""
+  raise "You must provide an azuredeploy.json file for deployment: #{deployment_parameter_directory}" if !(File.exist? template_file)
+  mode = ENV['DeploymentMode'] == 'Complete' ? '--mode Complete' : '--mode Incremental'
+  sh "az group deployment create --template-file #{template_file} --resource-group \"#{resource_group}\" #{parameters_suffix} #{mode}"
+end
+
+# Tasks
+namespace :deploy do
+  resource_group_deployment_directories.each do |deployment_directory|
+    desc "Deploys the group defined by the parameter file: #{deployment_directory}"
+    task deployment_directory.to_sym do |t, args|
+      set_subscription
+      deploy(
+        deployment_parameter_directory: deployment_directory,
+      )
+    end
+  end
+
+  deploy_tasks = resource_group_deployment_directories.reject do |task|
+    task == 'network'
+  end.map do |deployment_directory|
+    "deploy:#{deployment_directory}"
+  end
+
+  multitask all_configurations: deploy_tasks
+end
+
+task :deploy => [
+  "deploy:all_configurations"
+]
+
+def set_subscription
+  sh 'az account set -s 9a3f0bd1-1942-44fa-a433-041af8dd28ad'
+end
+
+namespace :control do
+
+  desc "deallocate most VMs in the nolo subscription leaving the minimal set"
+  task :minimal_stop do
+    vm_control( resource_groups, "deallocate", :in_control_group?)
+  end
+
+  desc "deallocate all VMs in the nolo subscription"
+  task :stop do
+    vm_control( resource_groups, "deallocate", nil)
+  end
+
+  desc "start all VMs in the nolo subscription"
+  task :start do
+    vm_control( resource_groups, "start", nil)
+  end
+end
+
+namespace :utils do
+  task :git_push_if_needed do
+    gitlog = `git log origin/master..master`
+    `git push` unless gitlog.length == 0
+  end
+end
+
+namespace :publish do
+  require 'bump/tasks'
+
+  task :package => ['bump:patch'] do
+    require 'zip'
+    version = Gem::Version::new(File.read('VERSION').gsub!('"',''))
+    package_name = 'arm-nolo'
+    zipfile_path = "#{package_name}-#{version}.zip"
+
+    FileUtils.rm zipfile_path if File.exist? zipfile_path
+    input_filenames = FileList["**/*"].reject do |file|
+      File.directory?(file)
+    end
+    
+    Zip::File.open(zipfile_path, Zip::File::CREATE) do |zipfile|
+      input_filenames.each do |filename|
+        zipfile.add(filename, filename)
+      end
+    end
+  end
+end
+
