@@ -7,6 +7,11 @@ BUILDER_URL=$3
 HAB_PACKAGE=$4
 HAB_SVC_CONFIG=$5
 
+hab_user_id=$(id -u hab || true)
+if [ -z "$hab_user_id" ]
+then
+  useradd hab
+fi
 
 selinux_level="$(getenforce)"
 if [ $selinux_level == "Enforcing" ]

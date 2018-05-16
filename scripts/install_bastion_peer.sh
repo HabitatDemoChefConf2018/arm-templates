@@ -5,6 +5,12 @@ PEER=$1
 VERSION=$2
 BUILDER_URL=$3
 
+hab_user_id=$(id -u hab || true)
+if [ -z "$hab_user_id" ]
+then
+  useradd hab
+fi
+
 selinux_level="$(getenforce)"
 if [ $selinux_level == "Enforcing" ]
 then
