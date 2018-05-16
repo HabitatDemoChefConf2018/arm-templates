@@ -4,7 +4,8 @@ set -e
 PEERS=$1
 VERSION=$2
 BUILDER_URL=$3
-HAB_SVC_CONFIG=$4
+HAB_PACKAGE=$4
+HAB_SVC_CONFIG=$5
 
 
 selinux_level="$(getenforce)"
@@ -32,11 +33,6 @@ else
   bash /tmp/install.sh -v $VERSION
 fi
 
-if [ -n $HAB_SVC_CONFIG ]
-then
-  hab sup load --url $BUILDER_URL $HAB_SVC_CONFIG
-fi
-
 habitat_service="$(systemctl list-units --all | grep habitat-supervisor.service || true)"
 tmp_unit_file="/tmp/habitat-supervisor.service"
 if [ -z "$habitat_service" ]
@@ -56,4 +52,12 @@ EOM
   mv $tmp_unit_file /usr/lib/systemd/system/
   systemctl enable habitat-supervisor
   systemctl start habitat-supervisor
+fi
+
+if [ -n $HAB_PACKAGE ]
+then
+  if [ -z $(hab sup status | grep $HAB_PACKAGE || true) ]
+  then
+    hab sup load --url $BUILDER_URL $HAB_PACKAGE $HAB_SVC_CONFIG
+  fi
 fi
