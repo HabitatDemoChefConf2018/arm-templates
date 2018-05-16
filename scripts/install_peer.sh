@@ -1,9 +1,11 @@
 #!/bin/bash
 
 set -e
-PEER=$1
+PEERS=$1
 VERSION=$2
 BUILDER_URL=$3
+HAB_SVC_CONFIG=$4
+
 
 selinux_level="$(getenforce)"
 if [ $selinux_level == "Enforcing" ]
@@ -12,13 +14,14 @@ then
 fi
 
 my_ip="$(hostname -I | cut -f1 -d' ')"
-if [ $my_ip == $PEER ]
-then
-  peer_flag=""
-else
-  peer_flag="--peer $PEER"
-fi
-echo $peer_flag
+peer_flag=""
+IFS=',' read -ra ADDR <<< "$PEERS"
+for i in "${ADDR[@]}"; do
+  if [ $my_ip != $i ]
+  then
+    peer_flag="$peer_flag --peer $i"
+  fi
+done
 
 curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh > /tmp/install.sh
 hab_version="$(hab -V || true)"
@@ -27,6 +30,11 @@ then
   echo "hab version $VERSION already installed"
 else
   bash /tmp/install.sh -v $VERSION
+fi
+
+if [ -n $HAB_SVC_CONFIG ]
+then
+  hab sup load --url $BUILDER_URL $HAB_SVC_CONFIG
 fi
 
 habitat_service="$(systemctl list-units --all | grep habitat-supervisor.service || true)"
@@ -39,7 +47,7 @@ then
 Description=The Habitat Supervisor
 
 [Service]
-ExecStart=/bin/hab sup run --url $BUILDER_URL $peer_flag --permanent-peer
+ExecStart=/bin/hab sup run --url $BUILDER_URL $peer_flag
 Restart=on-failure
 
 [Install]
