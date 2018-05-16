@@ -56,7 +56,8 @@ fi
 
 if [ -n $HAB_PACKAGE ]
 then
-  if [ -z $(hab sup status | grep $HAB_PACKAGE || true) ]
+  hab_pkg_status=$(hab sup status | grep $HAB_PACKAGE || true)
+  if [ -z "$hab_pkg_status" ]
   then
     hab sup load --url $BUILDER_URL $HAB_PACKAGE $HAB_SVC_CONFIG
   fi
