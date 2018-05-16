@@ -20,7 +20,7 @@ fi
 echo $peer_flag
 
 curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh > /tmp/install.sh
-hab_version="$(hab -V)"
+hab_version="$(hab -V || true)"
 if [[ $hab_version = *"$VERSION"* ]]
 then
   echo "hab version $VERSION already installed"

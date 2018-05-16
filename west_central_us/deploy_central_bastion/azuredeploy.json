@@ -102,26 +102,26 @@
             "apiVersion": "2015-06-15",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[concat('Microsoft.Network/networkInterfaces/CentralBastionVM', copyIndex())]"
+                "[concat('Microsoft.Compute/virtualMachines/CentralBastionVM', copyIndex())]"
             ],
             "copy": {
                 "name": "CentralBastionScriptLoop",
                 "count": 3
             },
             "properties": {
-              "publisher": "Microsoft.Azure.Extensions",
-              "type": "CustomScript",
-              "typeHandlerVersion": "2.0",
-              "autoUpgradeMinorVersion": true,
-              "settings": {
-                "fileUris": [
-                  "TODO"
-                ]
-              },
-              "protectedSettings": {
-                "commandToExecute": "[concat('sh install_bastion_peer.sh')]"
-              }
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.0",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": [
+                        "https://raw.githubusercontent.com/HabitatDemoChefConf2018/arm-templates/master/scripts/install_bastion_peer.sh"
+                    ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "sh install_bastion_peer.sh 11.100.0.36 0.55.0"
+                }
             }
-          }
+        }
     ]
 }
