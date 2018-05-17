@@ -18,6 +18,7 @@ if [ $selinux_level == "Enforcing" ]
 then
   setenforce Permissive
 fi
+sed -i 's/enforcing/disabled/g' /etc/selinux/config /etc/selinux/config
 
 my_ip="$(hostname -I | cut -f1 -d' ')"
 peer_flag=""
@@ -48,7 +49,7 @@ then
 Description=The Habitat Supervisor
 
 [Service]
-ExecStart=/bin/hab sup run --url $BUILDER_URL $peer_flag
+ExecStart=/bin/hab sup run
 Restart=on-failure
 
 [Install]

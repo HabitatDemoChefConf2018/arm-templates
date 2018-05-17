@@ -16,6 +16,7 @@ if [ $selinux_level == "Enforcing" ]
 then
   setenforce Permissive
 fi
+sed -i 's/enforcing/disabled/g' /etc/selinux/config /etc/selinux/config
 
 my_ip="$(hostname -I | cut -f1 -d' ')"
 if [ $my_ip == $PEER ]
