@@ -49,7 +49,7 @@ then
 Description=The Habitat Supervisor
 
 [Service]
-ExecStart=/bin/hab sup run
+ExecStart=/bin/hab sup run --url $BUILDER_URL $peer_flag
 Restart=on-failure
 
 [Install]
